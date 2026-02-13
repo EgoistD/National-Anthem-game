@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Letter Sound Keyboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Arial', sans-serif;
+            text-align: center;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: #333;
+        }
+        
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+        
+        h1 {
+            color: #667eea;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        
+        .subtitle {
+            color: #666;
+            font-size: 1.1em;
+            margin-bottom: 30px;
+        }
+        
+        #countryInfo {
+            font-size: 3.5em;
+            margin: 20px 0;
+        }
+        
+        .info-text {
+            font-size: 1.1em;
+            color: #555;
+            margin-bottom: 20px;
+            font-style: italic;
+        }
+        
+        #display {
+            font-size: 1.5em;
+            margin: 20px 0;
+            color: #007bff;
+            font-weight: bold;
+        }
+        
+        input {
+            border: 2px solid #667eea !important;
+            border-radius: 10px !important;
+            transition: all 0.3s;
+        }
+        
+        input:focus {
+            outline: none;
+            box-shadow: 0 0 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        button {
+            transition: all 0.3s;
+            font-weight: bold;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        }
+        
+        #stopBtn:hover {
+            background-color: #c82333 !important;
+        }
+        
+        #infoBtn:hover {
+            background-color: #218838 !important;
+        }
+        
+        #progressContainer {
+            display: none;
+        }
+        
+        #lyrics {
+            font-size: 1.4em;
+            margin-top: 30px;
+            color: #764ba2;
+            min-height: 70px;
+            font-weight: bold;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <h1>� National Anthem Player 🎶</h1>
+    <p>Type a country name and press Enter to play its national anthem:</p>
+    <input type="text" id="nameInput" placeholder="e.g., India, USA, France, Germany" style="font-size: 1.2em; padding: 10px; width: 300px; text-align: center;">    <br><br>
+    <button id="stopBtn" style="font-size: 1.1em; padding: 10px 30px; background-color: #dc3545; color: white; border: none; border-radius: 5px; cursor: pointer; display: none;">Stop Anthem</button>    <div id="display">Enter a country name above!</div>
+    <div id="lyrics" style="font-size: 1.3em; margin-top: 30px; color: #28a745; min-height: 60px; font-weight: bold; font-style: italic;"></div>
+
+    <script>
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const display = document.getElementById('display');
+        const lyricsDisplay = document.getElementById('lyrics');
+        const stopBtn = document.getElementById('stopBtn');
+        const infoBtn = document.getElementById('infoBtn');
+        const countryInfo = document.getElementById('countryInfo');
+        const countryDesc = document.getElementById('countryDesc');
+        const progressContainer = document.getElementById('progressContainer');
+        const progressBar = document.getElementById('progressBar');
+        
+        let scheduledTimeouts = [];
+        let activeOscillators = [];
+        
+        // Country metadata
+        const countryMetadata = {
+            'india': {flag: '🇮🇳', name: 'India', info: 'Jana Gana Mana - The morning song of India'},
+            'usa': {flag: '🇺🇸', name: 'United States', info: 'The Star-Spangled Banner - Land of the free'},
+            'france': {flag: '🇫🇷', name: 'France', info: 'La Marseillaise - The revolutionary anthem'},
+            'germany': {flag: '🇩🇪', name: 'Germany', info: 'Deutschlandlied - United by music'},
+            'brazil': {flag: '🇧🇷', name: 'Brazil', info: 'Hino Nacional - The vibrant spirit of Brazil'},
+            'russia': {flag: '🇷🇺', name: 'Russia', info: 'Gosudarstvenny Gimn - Strong and proud'},
+            'japan': {flag: '🇯🇵', name: 'Japan', info: 'Kimigayo - Ancient and timeless'},
+            'canada': {flag: '🇨🇦', name: 'Canada', info: 'O Canada - The great white north'},
+            'mexico': {flag: '🇲🇽', name: 'Mexico', info: 'Himno Nacional - Land of culture'},
+            'australia': {flag: '🇦🇺', name: 'Australia', info: 'Advance Australia Fair - The Southern Cross'}
+        };
+
+        // National anthems with better synchronization for singing along
+        const anthemData = {
+            'india': {
+                phrases: [
+                    {
+                        lyrics: "Jana Gana Mana",
+                        notes: [[261.63, 350], [293.66, 350], [329.63, 350], [349.23, 350], [392.00, 350], [440.00, 350]]
+                    },
+                    {
+                        lyrics: "Adhinayaka",
+                        notes: [[440.00, 400], [392.00, 400], [349.23, 400], [329.63, 400], [293.66, 400], [261.63, 400]]
+                    },
+                    {
+                        lyrics: "Jaya He",
+                        notes: [[329.63, 400], [349.23, 400], [392.00, 400], [440.00, 400], [493.88, 400], [523.25, 400]]
+                    },
+                    {
+                        lyrics: "Bharat Bhagia Vidhata",
+                        notes: [[523.25, 400], [493.88, 400], [440.00, 400], [392.00, 400], [349.23, 400], [329.63, 400]]
+                    },
+                    {
+                        lyrics: "Jaya, Jaya, Jaya He!",
+                        notes: [[349.23, 500], [392.00, 500], [440.00, 500], [493.88, 500], [523.25, 600]]
+                    }
+                ]
+            },
+            'usa': {
+                phrases: [
+                    {
+                        lyrics: "Oh say can you see",
+                        notes: [[392.00, 350], [329.63, 350], [261.63, 350], [329.63, 350], [392.00, 350], [329.63, 350], [261.63, 400]]
+                    },
+                    {
+                        lyrics: "by the dawn's early light",
+                        notes: [[392.00, 350], [440.00, 350], [493.88, 350], [523.25, 350], [587.33, 350], [659.25, 350], [698.46, 400]]
+                    },
+                    {
+                        lyrics: "What so proudly we hailed",
+                        notes: [[783.99, 600], [659.25, 400], [587.33, 400], [523.25, 400], [493.88, 400], [440.00, 400]]
+                    },
+                    {
+                        lyrics: "at the twilight's last gleaming",
+                        notes: [[392.00, 350], [329.63, 350], [261.63, 350], [329.63, 350], [392.00, 350], [329.63, 350], [261.63, 400]]
+                    },
+                    {
+                        lyrics: "whose broad stripes and bright stars",
+                        notes: [[392.00, 350], [440.00, 350], [493.88, 350], [523.25, 350], [587.33, 350], [659.25, 350], [698.46, 400]]
+                    }
+                ]
+            },
+            'france': {
+                phrases: [
+                    {
+                        lyrics: "Allons enfants de la Patrie",
+                        notes: [[349.23, 400], [392.00, 350], [440.00, 350], [493.88, 350], [523.25, 350], [587.33, 400]]
+                    },
+                    {
+                        lyrics: "le jour de gloire est arrivé",
+                        notes: [[587.33, 350], [523.25, 350], [493.88, 350], [440.00, 350], [392.00, 350], [349.23, 350], [329.63, 400]]
+                    },
+                    {
+                        lyrics: "Contre nous de la tyrannie",
+                        notes: [[349.23, 400], [392.00, 350], [440.00, 350], [493.88, 400], [523.25, 350], [587.33, 350], [659.25, 400]]
+                    },
+                    {
+                        lyrics: "l'étendard sanglant est levé",
+                        notes: [[659.25, 350], [587.33, 350], [523.25, 350], [493.88, 350], [440.00, 350], [392.00, 350], [349.23, 400]]
+                    },
+                    {
+                        lyrics: "Entendez-vous dans les campagnes",
+                        notes: [[349.23, 400], [392.00, 350], [440.00, 350], [493.88, 350], [523.25, 350], [587.33, 400]]
+                    }
+                ]
+            },
+            'germany': {
+                phrases: [
+                    {
+                        lyrics: "Deutschland, Deutschland",
+                        notes: [[261.63, 500], [293.66, 400], [329.63, 400], [261.63, 500]]
+                    },
+                    {
+                        lyrics: "über alles",
+                        notes: [[329.63, 500], [349.23, 400], [392.00, 400], [329.63, 500]]
+                    },
+                    {
+                        lyrics: "Über alles in der Welt",
+                        notes: [[349.23, 500], [392.00, 400], [440.00, 400], [493.88, 400], [523.25, 500]]
+                    },
+                    {
+                        lyrics: "wenn es stets zu Schutz und Trutze",
+                        notes: [[523.25, 400], [493.88, 400], [440.00, 400], [392.00, 400], [349.23, 500]]
+                    },
+                    {
+                        lyrics: "Brüderlich zusammenhält",
+                        notes: [[349.23, 500], [329.63, 400], [293.66, 400], [261.63, 500]]
+                    }
+                ]
+            }
+        };
+
+        function playTone(frequency, duration) {
+            if (frequency <= 0) return;
+            
+            // Create main oscillator
+            const oscillator = audioContext.createOscillator();
+            const mainGain = audioContext.createGain();
+            oscillator.connect(mainGain);
+            
+            // Create harmonic oscillator for richer sound
+            const harmonic = audioContext.createOscillator();
+            const harmonicGain = audioContext.createGain();
+            harmonic.connect(harmonicGain);
+            
+            // Create reverb effect
+            const convolver = audioContext.createConvolver();
+            const wetGain = audioContext.createGain();
+            const dryGain = audioContext.createGain();
+            
+            mainGain.connect(dryGain);
+            mainGain.connect(wetGain);
+            dryGain.connect(audioContext.destination);
+            wetGain.connect(audioContext.destination);
+            
+            // Set up oscillators
+            oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
+            oscillator.type = 'sine';
+            
+            // Add a harmonic overtone (perfect fifth above)
+            harmonic.frequency.setValueAtTime(frequency * 1.5, audioContext.currentTime);
+            harmonic.type = 'sine';
+            
+            // ADSR envelope for natural sound
+            const attack = 0.05;  // 50ms attack
+            const decay = 0.1;    // 100ms decay
+            const sustain = 0.7;  // 70% sustain level
+            const release = 0.2;  // 200ms release
+            
+            const attackEnd = audioContext.currentTime + attack;
+            const decayEnd = attackEnd + decay;
+            const sustainStart = decayEnd;
+            const releaseStart = audioContext.currentTime + duration / 1000;
+            const releaseEnd = releaseStart + release;
+            
+            // Main oscillator ADSR
+            mainGain.gain.setValueAtTime(0, audioContext.currentTime);
+            mainGain.gain.linearRampToValueAtTime(0.4, attackEnd);
+            mainGain.gain.linearRampToValueAtTime(sustain * 0.4, decayEnd);
+            mainGain.gain.setValueAtTime(sustain * 0.4, releaseStart);
+            mainGain.gain.linearRampToValueAtTime(0.01, releaseEnd);
+            
+            // Harmonic overtone ADSR (softer)
+            harmonicGain.gain.setValueAtTime(0, audioContext.currentTime);
+            harmonicGain.gain.linearRampToValueAtTime(0.15, attackEnd);
+            harmonicGain.gain.linearRampToValueAtTime(sustain * 0.15, decayEnd);
+            harmonicGain.gain.setValueAtTime(sustain * 0.15, releaseStart);
+            harmonicGain.gain.linearRampToValueAtTime(0.01, releaseEnd);
+            
+            // Connect harmonic to output
+            harmonicGain.connect(audioContext.destination);
+            
+            // Set wet/dry gain
+            wetGain.gain.setValueAtTime(0.2, audioContext.currentTime);
+            dryGain.gain.setValueAtTime(0.8, audioContext.currentTime);
+            
+            // Start and stop
+            oscillator.start(audioContext.currentTime);
+            harmonic.start(audioContext.currentTime);
+            oscillator.stop(releaseEnd);
+            harmonic.stop(releaseEnd);
+            
+            activeOscillators.push({oscillator, harmonic, stopTime: releaseEnd});
+        }
+
+        function updateLyrics(currentTime) {
+            lyricsDisplay.textContent = '';
+            const phrases = anthemData[currentCountry]?.phrases || [];
+            // Find matching phrase based on elapsed time
+            for (let phrase of phrases) {
+                if (currentTime >= phrase.startTime && currentTime < phrase.endTime) {
+                    lyricsDisplay.textContent = phrase.lyrics;
+                    break;
+                }
+            }
+        }
+
+        function stopAnthem() {
+            scheduledTimeouts.forEach(timeout => clearTimeout(timeout));
+            scheduledTimeouts = [];
+            
+            activeOscillators.forEach(osc => {
+                try {
+                    osc.oscillator.stop(audioContext.currentTime);
+                    if (osc.harmonic) osc.harmonic.stop(audioContext.currentTime);
+                } catch (e) {}
+        
+            });
+            activeOscillators = [];
+            
+            stopBtn.style.display = 'none';
+            lyricsDisplay.textContent = '';
+            display.textContent = 'Anthem stopped!';
+        }
+
+        let currentCountry = null;
+
+        stopBtn.addEventListener('click', stopAnthem);
+
+        document.getElementById('nameInput').addEventListener('keydown', function(event) {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                currentCountry = this.value.toLowerCase().trim();
+                
+                if (scheduledTimeouts.length > 0) {
+                    stopAnthem();
+                }
+                
+                if (anthemData[currentCountry]) {
+                    display.textContent = 'Playing national anthem of ' + this.value;
+                    stopBtn.style.display = 'inline-block';
+                    lyricsDisplay.textContent = '';
+                    
+                    const phrases = anthemData[currentCountry].phrases;
+                    let currentTime = 0;
+                    let totalDuration = 0;
+                    
+                    // Calculate timing for each phrase and play notes
+                    phrases.forEach((phrase, phraseIndex) => {
+                        phrase.startTime = currentTime;
+                        
+                        // Calculate duration of this phrase
+                        let phraseDuration = 0;
+                        phrase.notes.forEach(note => {
+                            phraseDuration += note[1];
+                        });
+                        
+                        // Add pause between phrases (300ms)
+                        phrase.endTime = currentTime + phraseDuration + 300;
+                        
+                        // Display lyric at the start of this phrase
+                        const lyricTimeoutId = setTimeout(() => {
+                            lyricsDisplay.textContent = phrase.lyrics;
+                        }, currentTime);
+                        scheduledTimeouts.push(lyricTimeoutId);
+                        
+                        // Play notes for this phrase
+                        phrase.notes.forEach((note, noteIndex) => {
+                            const noteTime = currentTime;
+                            const noteTimeoutId = setTimeout(() => {
+                                playTone(note[0], note[1]);
+                            }, noteTime);
+                            scheduledTimeouts.push(noteTimeoutId);
+                            
+                            currentTime += note[1];
+                        });
+                        
+                        currentTime = phrase.endTime;
+                        totalDuration = currentTime;
+                    });
+                    
+                    // Auto-hide button and clear lyrics after anthem finishes
+                    setTimeout(() => {
+                        stopBtn.style.display = 'none';
+                        lyricsDisplay.textContent = '';
+                        display.textContent = 'Anthem finished! Enter another country.';
+                    }, totalDuration + 500);
+                } else {
+                    display.textContent = 'Country not found. Try: India, USA, France, Germany';
+                    lyricsDisplay.textContent = '';
+                }
+            }
+        });
+    </script>
+</body>
+</html>
